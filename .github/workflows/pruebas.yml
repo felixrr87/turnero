@@ -3,6 +3,24 @@
 # En un repositorio PÚBLICO los minutos de GitHub Actions con los
 # runners estándar son gratis e ilimitados. Por eso este fichero no
 # cuesta dinero y el repositorio es público a propósito.
+#
+# POR QUÉ 3.9 CORRE EN OTRA MÁQUINA QUE LAS DEMÁS
+# -----------------------------------------------
+# La primera ejecución, el 2 de noviembre de 2026, salió roja. No por
+# el código: 3.11 y 3.13 pasaron las 20 pruebas, y en 3.9 ni siquiera
+# llegaron a lanzarse. Lo que falló fue el paso de ANTES,
+# actions/setup-python, porque `ubuntu-latest` ya no trae Python 3.9.
+#
+# Había dos salidas. Quitar 3.9 de la matriz era la cómoda, pero
+# entonces pyproject diría `requires-python = ">=3.9"` sin que nadie
+# lo hubiera comprobado nunca: justo la clase de afirmación que este
+# paquete no quiere hacer. La otra es correr esa versión en la máquina
+# donde sí existe. Es la que está aquí.
+#
+# Si algún día ubuntu-22.04 desaparece, hay que elegir otra vez: o se
+# encuentra dónde correr 3.9, o se sube el mínimo a 3.10 en
+# pyproject.toml y se quitan sus clasificadores. Lo que NO vale es
+# dejar de probarla y seguir diciendo que funciona.
 name: pruebas
 
 on:
@@ -12,11 +30,17 @@ on:
 
 jobs:
   pytest:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.so }}
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.9", "3.11", "3.13"]
+        include:
+          - python: "3.9"
+            so: ubuntu-22.04
+          - python: "3.11"
+            so: ubuntu-latest
+          - python: "3.13"
+            so: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
