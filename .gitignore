@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+.venv/
+venv/
+.DS_Store
+
+# Las instrucciones de publicación son para Félix, no para quien se
+# instale el paquete. Fuera del repositorio público a propósito.
+COMO_PUBLICAR.txt
