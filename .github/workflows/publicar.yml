@@ -1,0 +1,80 @@
+# Publicar en PyPI sin que exista ningún token en ninguna parte.
+#
+# POR QUÉ ASÍ
+# -----------
+# Lo normal es crear un token en PyPI, guardarlo en ~/.pypirc o en los
+# secretos del repositorio, y subir el paquete desde ahí. Funciona, y
+# tiene un problema: existe un secreto. Un secreto que se puede copiar,
+# pegar donde no debe y acabar en un repositorio público. En este
+# proyecto eso no es una hipótesis — la clave de football-data de
+# Sportalyze acabó en el historial público de git y lo único que cerró
+# aquello fue anularla en el proveedor.
+#
+# Esto es «Trusted Publishing»: PyPI confía en ESTE flujo de trabajo,
+# de ESTE repositorio, y GitHub le entrega un carné de identidad de un
+# solo uso (OIDC) cada vez que corre. No hay nada que guardar, nada que
+# rotar y nada que filtrar. Si alguien se lleva una copia del
+# repositorio, no se lleva con ella la capacidad de publicar.
+#
+# CÓMO SE PUBLICA UNA VERSIÓN
+# ---------------------------
+#     git tag v0.1.0
+#     git push origin v0.1.0
+#
+# Y ya. Nada más es necesario, y nada menos: la etiqueta es el gesto
+# que dice «esto es una versión».
+name: publicar
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  construir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # La etiqueta y la versión del paquete tienen que decir lo mismo.
+      # Si no, se publica una v0.1.1 que por dentro dice 0.1.0 y en PyPI
+      # eso no se arregla nunca: una versión publicada no se puede
+      # borrar ni reemplazar. Mejor parar aquí.
+      - name: La etiqueta tiene que coincidir con la versión
+        run: |
+          ETIQUETA="${GITHUB_REF_NAME#v}"
+          VERSION=$(sed -n 's/^version *= *"\(.*\)"/\1/p' pyproject.toml | head -1)
+          echo "etiqueta: $ETIQUETA   pyproject: $VERSION"
+          if [ "$ETIQUETA" != "$VERSION" ]; then
+            echo "::error::La etiqueta dice $ETIQUETA y pyproject.toml dice $VERSION."
+            exit 1
+          fi
+
+      - run: pip install -e ".[dev]"
+
+      # No se publica nada que no pase sus propias pruebas. Las de las
+      # tres versiones de Python ya corrieron en el push; esto es el
+      # último cerrojo antes de que salga de aquí.
+      - run: pytest -q
+
+      - run: pip install build
+      - run: python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paquete
+          path: dist/
+
+  publicar:
+    needs: construir
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write          # esto es lo que sustituye al token
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: paquete
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
